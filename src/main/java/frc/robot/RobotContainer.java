@@ -16,6 +16,7 @@ import edu.wpi.first.math.trajectory.TrajectoryGenerator;
 import edu.wpi.first.networktables.NetworkTableInstance;
 import edu.wpi.first.networktables.StructArrayPublisher;
 import edu.wpi.first.networktables.StructPublisher;
+import edu.wpi.first.util.sendable.Sendable;
 import edu.wpi.first.wpilibj.XboxController;
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
@@ -54,6 +55,8 @@ import com.pathplanner.lib.auto.NamedCommands;
  */
 public class RobotContainer {
   private final SendableChooser<Command> autoChooser;
+  private SendableChooser<String> modeChooser;
+  private SendableChooser<Integer> portChooser;
   
   // The robot's subsystems
   private final DriveSubsystem m_robotDrive = new DriveSubsystem();
@@ -66,12 +69,18 @@ public class RobotContainer {
   private final Climber m_climber = new Climber();
 
   // The driver's controller
-  CommandXboxController m_driverController = new CommandXboxController(OIConstants.kDriverControllerPort);
-
+  CommandXboxController m_driverController;
   /**
    * The container for the robot. Contains subsystems, OI devices, and commands.
    */
   public RobotContainer() {
+    
+    portChooser = new SendableChooser<>();
+    portChooser.setDefaultOption("Port 0", 0);
+    portChooser.addOption("Port 1", 1);
+    SmartDashboard.putData("Port Chooser", portChooser);
+    m_driverController = new CommandXboxController(portChooser.getSelected());
+
     registerNamedCommands();
     // Configure the button bindings
     configureButtonBindings();
@@ -88,9 +97,9 @@ public class RobotContainer {
         // Turning is controlled by the X axis of the right stick.
         new RunCommand(
             () -> m_robotDrive.drive(
-                -MathUtil.applyDeadband(m_driverController.getLeftY(), OIConstants.kDriveDeadband),
-                -MathUtil.applyDeadband(m_driverController.getLeftX(), OIConstants.kDriveDeadband),
-                -MathUtil.applyDeadband(m_driverController.getRightX(), OIConstants.kDriveDeadband),
+                -MathUtil.applyDeadband(m_driverController.getLeftY() * 0.5, OIConstants.kDriveDeadband),
+                -MathUtil.applyDeadband(m_driverController.getLeftX() * 0.5, OIConstants.kDriveDeadband),
+                -MathUtil.applyDeadband(m_driverController.getRightX() * 0.6, OIConstants.kDriveDeadband),
                 true),
             m_robotDrive));
     // For convenience a programmer could change this when going to competition.
@@ -104,6 +113,11 @@ public class RobotContainer {
         ? stream.filter(auto -> auto.getName().startsWith(""))
         : stream
     );
+    modeChooser = new SendableChooser<>(); 
+    modeChooser.setDefaultOption("Just Driver", "Just Driver");
+    modeChooser.addOption("Driver & Operator", "Driver & Operator");
+
+    
 
     StructPublisher<Pose2d> publisher = NetworkTableInstance.getDefault()
       .getStructTopic("MyPose", Pose2d.struct).publish();
@@ -112,41 +126,44 @@ public class RobotContainer {
 
 
     SmartDashboard.putData("Auto Chooser", autoChooser);
+    SmartDashboard.putData("Controller Mode Chooser", modeChooser);
 
   }
 
   private void registerNamedCommands(){
-    NamedCommands.registerCommand("ShootyMcShootFace", new InstantCommand(
-      () -> m_shooter.shootAtTarget(FieldPoints.getHubPosition()), m_shooter)
-      .alongWith(new RunCommand(
-        () -> m_robotDrive.turnToFieldPoint(FieldPoints.getHubPosition(), m_driverController), m_robotDrive))
-        .until(
-          () -> m_shooter.isAtSetpoint() && m_robotDrive.isAtTurnTarget())
-        .andThen(new RunCommand(
-          () -> m_delivery.stutter(Constants.DeliveryConstants.kDeliveryVoltage), m_delivery))
-          .alongWith(new RunCommand(() -> m_shooterDelivery.setDeliveryVoltage(Constants.ShooterConstants.kShooterDeliveryVoltage), m_shooterDelivery)));
+    // NamedCommands.registerCommand("ShootyMcShootFace", new InstantCommand(
+    //   () -> m_shooter.shootAtTarget(FieldPoints.getHubPosition()), m_shooter)
+    //   .alongWith(new RunCommand(
+    //     () -> m_robotDrive.turnToFieldPoint(FieldPoints.getHubPosition(), m_driverController), m_robotDrive))
+    //     .until(() -> m_shooter.isAtSetpoint() && m_robotDrive.isAtTurnTarget())
+    //     // Cleanly group the feed mechanisms together so they wait for the aim to finish
+    //     .andThen(Commands.parallel(
+    //       new RunCommand(() -> m_delivery.stutter(Constants.DeliveryConstants.kDeliveryVoltage), m_delivery),
+    //       new RunCommand(() -> m_shooterDelivery.setDeliveryVoltage(Constants.ShooterConstants.kShooterDeliveryVoltage), m_shooterDelivery)
+    //     ))
+    // );
 
-    //intake out
-    NamedCommands.registerCommand("IntakeOut", new RunCommand(
-      () -> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kGround), m_intake));
+    // //intake out
+    // NamedCommands.registerCommand("IntakeOut", new RunCommand(
+    //   () -> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kGround), m_intake));
 
-      //intake fuel
-    NamedCommands.registerCommand("IntakeBall", new RunCommand(
-      () -> m_intakeSpin.setIntakeVoltage(12), m_intake));
+    //   //intake fuel
+    // NamedCommands.registerCommand("IntakeBall", new RunCommand(
+    //   () -> m_intakeSpin.setIntakeVoltage(12), m_intakeSpin));
 
-    //intake in
-    NamedCommands.registerCommand("IntakeIn", new RunCommand(
-      ()-> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kStowed), m_intake));
+    // //intake in
+    // NamedCommands.registerCommand("IntakeIn", new RunCommand(
+    //   ()-> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kStowed), m_intake));
 
-      //shooter delivery
-      NamedCommands.registerCommand("Delivery", new RunCommand(
-        ()-> m_delivery.stutter(10), m_delivery));
+    //   //shooter delivery
+    //   NamedCommands.registerCommand("Delivery", new RunCommand(
+    //     ()-> m_delivery.stutter(10), m_delivery));
 
-      //stop shooter, shooter delivery, and delivery
-      NamedCommands.registerCommand("StoppyMcStopFace", new RunCommand(
-        ()-> m_shooter.setFlyWheelVoltage(0), m_shooter).alongWith(new RunCommand(
-          ()-> m_shooterDelivery.setDeliveryVoltage(0), m_shooterDelivery)).alongWith(new RunCommand(
-            ()-> m_delivery.stutter(0), m_delivery)));
+    //   //stop shooter, shooter delivery, and delivery
+    //   NamedCommands.registerCommand("StoppyMcStopFace", new RunCommand(
+    //     ()-> m_shooter.setFlyWheelVoltage(0), m_shooter).alongWith(new RunCommand(
+    //       ()-> m_shooterDelivery.setDeliveryVoltage(0), m_shooterDelivery)).alongWith(new RunCommand(
+    //         ()-> m_delivery.stutter(0), m_delivery)));
       
     
 
@@ -302,16 +319,16 @@ public class RobotContainer {
 //     //       .alongWith(new RunCommand(() -> m_shooterDelivery.setDeliveryVoltage(Constants.ShooterConstants.kShooterDeliveryVoltage), m_shooterDelivery)));
 
 //     // Reset heading
-//     m_driverController.start().onTrue(Commands.runOnce(
-//       () -> m_robotDrive.zeroHeading()
-//       , m_robotDrive));
+    m_driverController.start().onTrue(Commands.runOnce(
+      () -> m_robotDrive.zeroHeading()
+      , m_robotDrive));
 
-//     //put intake out
-//     m_driverController.rightStick().onTrue(new RunCommand(
-//       () -> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kGround), m_intake));
+    // Put intake out
+     m_driverController.rightStick().onTrue(new RunCommand(
+      () -> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kGround), m_intake));
 
-//           m_driverController.leftStick().onTrue(new RunCommand(
-//       () -> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kStowed), m_intake));
+          m_driverController.leftStick().onTrue(new RunCommand(
+      () -> m_intake.setIntakePosition(Constants.IntakeConstants.IntakePosition.kStowed), m_intake));
 
 
 
@@ -346,14 +363,14 @@ public class RobotContainer {
 //       // .onFalse(new RunCommand(() -> m_shooter.setFlyWheelVoltage(0)));
 
     //put climber up
-    m_driverController.x().onTrue(new RunCommand(
-      () -> m_climber.setVoltage(4), m_climber)).onFalse(new RunCommand(
-        () -> m_climber.setVoltage(0), m_climber));
+    // m_driverController.x().onTrue(new RunCommand(
+    //   () -> m_climber.setVoltage(4), m_climber)).onFalse(new RunCommand(
+    //     () -> m_climber.setVoltage(0), m_climber));
 
-    //put climber down
-    m_driverController.y().onTrue(new RunCommand(
-      () -> m_climber.setVoltage(-4), m_climber)).onFalse(new RunCommand(
-        () -> m_climber.setVoltage(0), m_climber));
+    // //put climber down
+    // m_driverController.y().onTrue(new RunCommand(
+    //   () -> m_climber.setVoltage(-4), m_climber)).onFalse(new RunCommand(
+    //     () -> m_climber.setVoltage(0), m_climber));
     
     //spinny mc spinface
     // m_driverController.rightTrigger().onTrue(new RunCommand(
@@ -374,4 +391,9 @@ public class RobotContainer {
   public Command getAutonomousCommand() {
     return autoChooser.getSelected();
   }
+  public void configureController() {
+    m_driverController = new CommandXboxController(portChooser.getSelected());
+    configureButtonBindings();
+  }
+
 }
